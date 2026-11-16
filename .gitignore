@@ -39,3 +39,10 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+!.env.example
+
+# private notes for the application, not part of the submission
+BRIEF.md
+
+# local Convex backend state
+.convex/
