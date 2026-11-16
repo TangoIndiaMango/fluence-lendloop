@@ -6,21 +6,19 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
-import { ToolForm } from "@/components/ToolForm";
-import { ActionButton, Empty, PageHeader, Skeleton } from "@/components/ui";
-import { formatDate } from "@/lib/format";
+import { ToolForm } from "@/components/tools/ToolForm";
+import { ActionButton, AvailabilityBadge, Empty, PageHeader, Skeleton } from "@/components/ui";
+import { plural } from "@/lib/format";
 
 function Listings() {
-  const params = useSearchParams();
+  const creating = useSearchParams().get("new") === "1";
   const router = useRouter();
-  const creating = params.get("new") === "1";
   const [editing, setEditing] = useState<Id<"tools"> | null>(null);
 
   const tools = useQuery(api.tools.mine);
   const create = useMutation(api.tools.create);
   const update = useMutation(api.tools.update);
   const remove = useMutation(api.tools.remove);
-
   const closeCreate = () => router.replace("/listings");
 
   return (
@@ -49,8 +47,11 @@ function Listings() {
         <Skeleton />
       ) : tools.length === 0 ? (
         !creating && (
-          <Empty>
-            You haven&apos;t listed anything yet. <Link href="/listings?new=1" className="text-accent underline">List your first tool</Link>
+          <Empty
+            title="You haven't listed anything yet"
+            action={<Link href="/listings?new=1" className="btn-primary">List your first tool</Link>}
+          >
+            Neighbours can only borrow what&apos;s listed. It takes under a minute.
           </Empty>
         )
       ) : (
@@ -69,28 +70,31 @@ function Listings() {
                 />
               ) : (
                 <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <h2 className="font-semibold">{t.name}</h2>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h2 className="font-semibold">{t.name}</h2>
+                      <AvailabilityBadge availability={t.availability} />
+                    </div>
                     <p className="text-xs text-muted">
-                      {t.category} · {t.condition} condition ·{" "}
-                      {t.availability.state === "available"
-                        ? "available"
-                        : `on loan until ${formatDate(t.availability.until)}`}
+                      {t.category} · {t.condition} condition
                     </p>
                     {t.description && <p className="mt-2 text-sm">{t.description}</p>}
                     {t.pendingRequests > 0 && (
-                      <Link href="/incoming" className="mt-2 inline-block text-sm font-medium text-accent underline">
-                        {t.pendingRequests} pending request{t.pendingRequests > 1 ? "s" : ""}
+                      <Link href="/incoming" className="focus-ring mt-2 inline-block rounded text-sm font-medium text-accent underline">
+                        {plural(t.pendingRequests, "pending request")}
                       </Link>
                     )}
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex flex-wrap gap-2">
                     <button className="btn-secondary" onClick={() => setEditing(t._id)}>
                       Edit
                     </button>
                     <ActionButton
                       variant="danger"
-                      confirm={`Remove "${t.name}"? Any pending requests will be declined.`}
+                      confirm={{
+                        prompt: t.pendingRequests ? "Remove and decline pending requests?" : "Remove this listing?",
+                        confirmLabel: "Remove",
+                      }}
                       onAction={() => remove({ toolId: t._id })}
                     >
                       Remove

@@ -5,66 +5,79 @@ import { useState } from "react";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 import { LIMITS } from "@convex/lib/constants";
-import { errorMessage, todayIso } from "@/lib/format";
-import { ErrorText } from "./ui";
+import { ErrorText, Field, FormActions } from "@/components/ui";
+import { useAsyncAction } from "@/hooks/useAsyncAction";
+import { formatRange, plural, todayIso } from "@/lib/format";
 
-export function RequestForm({ toolId, onDone }: { toolId: Id<"tools">; onDone: (sent: boolean) => void }) {
+type Range = { startDate: string; endDate: string };
+
+function daysInclusive({ startDate, endDate }: Range) {
+  return Math.round((Date.parse(endDate) - Date.parse(startDate)) / 86_400_000) + 1;
+}
+
+export function RequestForm({
+  toolId,
+  booked,
+  onDone,
+}: {
+  toolId: Id<"tools">;
+  booked: Range[];
+  onDone: (sent: boolean) => void;
+}) {
   const request = useMutation(api.loans.request);
   const today = todayIso();
-  const [startDate, setStart] = useState(today);
-  const [endDate, setEnd] = useState(today);
+  const [range, setRange] = useState<Range>({ startDate: today, endDate: today });
   const [message, setMessage] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+  const { run, busy, error } = useAsyncAction(() =>
+    request({ toolId, ...range, message: message.trim() || undefined }),
+  );
+
+  // Instant feedback for the common mistake; the server still re-checks.
+  const clash = booked.find((b) => range.startDate <= b.endDate && b.startDate <= range.endDate);
+  const days = daysInclusive(range);
+  const tooLong = days > LIMITS.maxLoanDays;
 
   return (
     <form
       className="mt-3 grid gap-3 border-t border-border pt-3"
       onSubmit={async (e) => {
         e.preventDefault();
-        setBusy(true);
-        setError(null);
-        try {
-          await request({ toolId, startDate, endDate, message: message || undefined });
-          onDone(true);
-        } catch (err) {
-          setError(errorMessage(err));
-        } finally {
-          setBusy(false);
-        }
+        if (await run()) onDone(true);
       }}
     >
       <div className="grid grid-cols-2 gap-2">
-        <label>
-          <span className="label">From</span>
+        <Field label="From">
           <input
             type="date"
             className="input"
             required
             min={today}
-            value={startDate}
+            value={range.startDate}
             onChange={(e) => {
-              setStart(e.target.value);
-              if (e.target.value > endDate) setEnd(e.target.value);
+              const startDate = e.target.value;
+              setRange((r) => ({ startDate, endDate: r.endDate < startDate ? startDate : r.endDate }));
             }}
           />
-        </label>
-        <label>
-          <span className="label">Until</span>
+        </Field>
+        <Field label="Until">
           <input
             type="date"
             className="input"
             required
-            min={startDate}
-            value={endDate}
-            onChange={(e) => setEnd(e.target.value)}
+            min={range.startDate}
+            value={range.endDate}
+            onChange={(e) => setRange((r) => ({ ...r, endDate: e.target.value }))}
           />
-        </label>
+        </Field>
       </div>
-      <label>
-        <span className="label">
-          Note to the lender <span className="font-normal text-muted">(optional)</span>
-        </span>
+      <p className={`text-xs ${clash || tooLong ? "text-red-700" : "text-muted"}`} aria-live="polite">
+        {clash
+          ? `Already booked ${formatRange(clash.startDate, clash.endDate)}. Pick other dates.`
+          : tooLong
+            ? `Loans can be at most ${LIMITS.maxLoanDays} days.`
+            : plural(days, "day")}
+      </p>
+      <Field label="Note to the lender" optional hint={`${message.length}/${LIMITS.requestMessage}`}>
         <textarea
           className="input"
           rows={2}
@@ -73,16 +86,15 @@ export function RequestForm({ toolId, onDone }: { toolId: Id<"tools">; onDone: (
           value={message}
           onChange={(e) => setMessage(e.target.value)}
         />
-      </label>
+      </Field>
       <ErrorText>{error}</ErrorText>
-      <div className="flex gap-2">
-        <button className="btn-primary" disabled={busy}>
-          {busy ? "Sending…" : "Send request"}
-        </button>
-        <button type="button" className="btn-secondary" onClick={() => onDone(false)}>
-          Cancel
-        </button>
-      </div>
+      <FormActions
+        busy={busy}
+        submitDisabled={Boolean(clash) || tooLong}
+        submitLabel="Send request"
+        busyLabel="Sending…"
+        onCancel={() => onDone(false)}
+      />
     </form>
   );
 }

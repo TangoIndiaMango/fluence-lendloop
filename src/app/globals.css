@@ -1,13 +1,17 @@
 @import "tailwindcss";
 
+/* Design tokens. Components use these names, never raw hex values. */
 :root {
   --background: #faf8f4;
   --foreground: #1f2421;
   --muted: #6b716c;
   --card: #ffffff;
+  --surface-muted: #f3f0ea;
   --border: #e6e1d8;
   --accent: #2f6b4f;
+  --accent-hover: #25573f;
   --accent-soft: #e5f0ea;
+  --accent-line: #c7dfd2;
 }
 
 @theme inline {
@@ -15,9 +19,12 @@
   --color-foreground: var(--foreground);
   --color-muted: var(--muted);
   --color-card: var(--card);
+  --color-surface-muted: var(--surface-muted);
   --color-border: var(--border);
   --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
   --color-accent-soft: var(--accent-soft);
+  --color-accent-line: var(--accent-line);
   --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
 }
 
@@ -27,17 +34,28 @@ body {
   font-family: var(--font-sans);
 }
 
+/* Keyboard users always see where they are. */
+@utility focus-ring {
+  @apply outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background;
+}
+
 @utility btn {
-  @apply inline-flex items-center justify-center gap-1.5 rounded-lg px-3.5 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50;
+  @apply focus-ring inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg px-3.5 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50;
 }
 @utility btn-primary {
-  @apply btn bg-accent text-white hover:bg-[#25573f];
+  @apply btn bg-accent text-white hover:bg-accent-hover;
 }
 @utility btn-secondary {
-  @apply btn border border-border bg-card hover:bg-[#f3f0ea];
+  @apply btn border border-border bg-card hover:bg-surface-muted;
 }
 @utility btn-danger {
   @apply btn border border-red-200 bg-card text-red-700 hover:bg-red-50;
+}
+@utility btn-ghost {
+  @apply btn text-muted hover:bg-surface-muted hover:text-foreground;
+}
+@utility chip {
+  @apply focus-ring rounded-full border px-3 py-1 text-sm transition-colors;
 }
 @utility input {
   @apply w-full rounded-lg border border-border bg-card px-3 py-2 text-sm outline-none focus:border-accent focus:ring-2 focus:ring-accent/20;
@@ -47,4 +65,7 @@ body {
 }
 @utility card {
   @apply rounded-xl border border-border bg-card p-4;
+}
+@utility section-title {
+  @apply mb-2 text-sm font-semibold uppercase tracking-wide text-muted;
 }

@@ -39,7 +39,12 @@ pnpm install
 **1. Clerk.** Create an application in the Clerk dashboard, then:
 
 - Copy the publishable and secret keys into `.env.local` (see `.env.example`).
-- Turn on the **Convex integration** (Dashboard → Integrations → Convex), or create a JWT template named `convex`. Make sure the token includes the user's `email` and `name`. Convex uses the email to address notifications.
+- Turn on the **Convex integration** (Dashboard → Integrations → Convex), or create a JWT template named `convex`.
+- Add `email` and `name` to the session token (Configure → Sessions → Customize session token). The integration doesn't include them by default, and without them nobody gets notification emails and `users:setRole` can't find you:
+
+  ```json
+  { "name": "{{user.full_name}}", "email": "{{user.primary_email_address}}" }
+  ```
 - Note the **Frontend API URL** (`https://<something>.clerk.accounts.dev`).
 
 **2. Convex.** In one terminal:
@@ -149,12 +154,24 @@ It checks that unsigned, forged and stale calls are rejected, that a valid call 
 
 - `schema.ts`: `users`, `tools` (soft-deleted), `loans`, `outbox`, `automationEvents`, `workflowErrors`.
 - `lib/auth.ts`: `requireViewer` / `requireAdmin`. Every public function starts with one of them.
-- `tools.ts`, `loans.ts`, `users.ts`: product logic and role checks.
+- `lib/errors.ts`: `fail(code, message)`. Every user-facing error has one shape, `{ code, message }`, with a stable code (`NOT_FOUND`, `FORBIDDEN`, `CONFLICT`, `INVALID_INPUT`, `INVALID_STATE`, `LIMIT_REACHED`, …). Anything else is a bug and is redacted by Convex in production.
+- `model/loans.ts`: loan business rules as plain functions that take `ctx` (`assertBookableRange`, `assertNoApprovedClash`, `loadLoanAs`, `assertStatus`, `presentLoan`).
+- `tools.ts`, `loans.ts`, `users.ts`: the public API. Each function reads as authorise → check → change → notify.
 - `notifications.ts`: transactional outbox and the signed delivery action with retries.
 - `http.ts` + `automation.ts`: the four HMAC-protected endpoints n8n calls, backed by internal functions that the browser can't reach.
 - `seed.ts`: demo data (internal).
 
 **Loan lifecycle:** `pending → approved → returned`, or `pending → declined | cancelled`. Overdue is derived (approved and the end date has passed), not stored, so it can't drift. Approving re-checks for clashes and auto-declines other pending requests for overlapping dates, and their borrowers are told.
+
+**Next.js** (`src/`)
+
+- `components/ui/`: the design-system layer: buttons (with inline confirm instead of `window.confirm`), an accessible switch, badges, form fields, empty/loading/error states. Colours come from tokens in `globals.css`.
+- `components/tools/`, `components/loans/`, `components/admin/`: feature components (cards, forms, filter bar, tables).
+- `hooks/`: `useAsyncAction` (busy/error/run around any mutation, so no component writes its own try/catch), `useToolFilters` (browse filters in the URL), `useStoreUser`.
+- `lib/errors.ts` turns the server's `{ code, message }` into UI text; `lib/format.ts` holds date and text helpers.
+- Pages stay thin: fetch, compose components, wire actions.
+
+**Browse filters:** category is filtered in Convex through the `by_removed_category` index; text search and "available now" are applied to the loaded list. All three live in the URL (`?category=Garden&q=hedge&available=1`), so refresh, back and shared links keep them. Borrowers see upcoming booked ranges on each card, and the request form flags a clash before submitting (the server still re-checks).
 
 **n8n** (`n8n/`)
 

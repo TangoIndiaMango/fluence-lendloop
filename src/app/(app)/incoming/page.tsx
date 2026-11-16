@@ -1,8 +1,9 @@
 "use client";
 
 import { useMutation, useQuery } from "convex/react";
+import Link from "next/link";
 import { api } from "@convex/_generated/api";
-import { LoanCard, type Loan } from "@/components/LoanCard";
+import { LoanGroup, type Loan } from "@/components/loans/LoanCard";
 import { ActionButton, Empty, PageHeader, Skeleton } from "@/components/ui";
 
 export default function IncomingPage() {
@@ -11,13 +12,32 @@ export default function IncomingPage() {
   const decline = useMutation(api.loans.decline);
   const markReturned = useMutation(api.loans.markReturned);
 
-  const groups: { title: string; items: Loan[] }[] = loans
-    ? [
-        { title: "Waiting for you", items: loans.filter((l) => l.status === "pending") },
-        { title: "Out on loan", items: loans.filter((l) => l.status === "approved") },
-        { title: "History", items: loans.filter((l) => !["pending", "approved"].includes(l.status)) },
-      ]
-    : [];
+  const actions = (loan: Loan) => {
+    if (loan.status === "pending") {
+      return (
+        <>
+          <ActionButton variant="primary" busyLabel="Approving…" onAction={() => approve({ loanId: loan._id })}>
+            Approve
+          </ActionButton>
+          <ActionButton busyLabel="Declining…" onAction={() => decline({ loanId: loan._id })}>
+            Decline
+          </ActionButton>
+        </>
+      );
+    }
+    if (loan.status === "approved") {
+      return (
+        <ActionButton
+          confirm={{ prompt: "Got it back?", confirmLabel: "Yes, returned" }}
+          variant="primary"
+          onAction={() => markReturned({ loanId: loan._id })}
+        >
+          Mark returned
+        </ActionButton>
+      );
+    }
+    return null;
+  };
 
   return (
     <>
@@ -25,41 +45,18 @@ export default function IncomingPage() {
       {loans === undefined ? (
         <Skeleton />
       ) : loans.length === 0 ? (
-        <Empty>No one has asked to borrow your tools yet.</Empty>
+        <Empty
+          title="No requests yet"
+          action={<Link href="/listings" className="btn-secondary">Check your listings</Link>}
+        >
+          When a neighbour asks to borrow one of your tools, it shows up here.
+        </Empty>
       ) : (
-        groups
-          .filter((g) => g.items.length > 0)
-          .map((g) => (
-            <section key={g.title} className="mb-6">
-              <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-muted">{g.title}</h2>
-              <ul className="grid gap-3">
-                {g.items.map((loan) => (
-                  <LoanCard
-                    key={loan._id}
-                    loan={loan}
-                    perspective="owner"
-                    actions={
-                      loan.status === "pending" ? (
-                        <>
-                          <ActionButton variant="primary" onAction={() => approve({ loanId: loan._id })}>
-                            Approve
-                          </ActionButton>
-                          <ActionButton onAction={() => decline({ loanId: loan._id })}>Decline</ActionButton>
-                        </>
-                      ) : loan.status === "approved" ? (
-                        <ActionButton
-                          confirm={`Mark "${loan.tool?.name}" as returned?`}
-                          onAction={() => markReturned({ loanId: loan._id })}
-                        >
-                          Mark returned
-                        </ActionButton>
-                      ) : null
-                    }
-                  />
-                ))}
-              </ul>
-            </section>
-          ))
+        <>
+          <LoanGroup title="Waiting for you" perspective="owner" actions={actions} loans={loans.filter((l) => l.status === "pending")} />
+          <LoanGroup title="Out on loan" perspective="owner" actions={actions} loans={loans.filter((l) => l.status === "approved")} />
+          <LoanGroup title="History" perspective="owner" loans={loans.filter((l) => l.status !== "pending" && l.status !== "approved")} />
+        </>
       )}
     </>
   );

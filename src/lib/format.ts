@@ -1,11 +1,3 @@
-import { ConvexError } from "convex/values";
-
-/** Show the server's ConvexError message; hide anything else. */
-export function errorMessage(e: unknown): string {
-  if (e instanceof ConvexError && typeof e.data === "string") return e.data;
-  return "Something went wrong. Please try again.";
-}
-
 const rtf = new Intl.RelativeTimeFormat("en", { numeric: "auto" });
 
 export function timeAgo(ms: number, now = Date.now()): string {
@@ -33,6 +25,15 @@ export function formatRange(start: string, end: string): string {
   return start === end ? formatDate(start) : `${formatDate(start)} – ${formatDate(end)}`;
 }
 
+/** Today as YYYY-MM-DD in UTC, matching the server's notion of "today". */
 export function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
+}
+
+export function capitalise(s: string): string {
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+export function plural(n: number, word: string): string {
+  return `${n} ${word}${n === 1 ? "" : "s"}`;
 }

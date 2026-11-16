@@ -2,13 +2,16 @@
 
 import { useState } from "react";
 import { CATEGORIES, CONDITIONS, LIMITS, type Category, type Condition } from "@convex/lib/constants";
-import { errorMessage } from "@/lib/format";
-import { ErrorText } from "./ui";
+import { ErrorText, Field, FormActions } from "@/components/ui";
+import { useAsyncAction } from "@/hooks/useAsyncAction";
+import { capitalise } from "@/lib/format";
 
 export type ToolInput = { name: string; category: Category; condition: Condition; description: string };
 
+const EMPTY: ToolInput = { name: "", category: "Power tools", condition: "good", description: "" };
+
 export function ToolForm({
-  initial,
+  initial = EMPTY,
   submitLabel,
   onSubmit,
   onCancel,
@@ -18,68 +21,49 @@ export function ToolForm({
   onSubmit: (input: ToolInput) => Promise<unknown>;
   onCancel: () => void;
 }) {
-  const [form, setForm] = useState<ToolInput>(
-    initial ?? { name: "", category: "Power tools", condition: "good", description: "" },
-  );
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  const set = <K extends keyof ToolInput>(k: K, v: ToolInput[K]) => setForm((f) => ({ ...f, [k]: v }));
+  const [form, setForm] = useState<ToolInput>(initial);
+  const { run, busy, error } = useAsyncAction(onSubmit);
+  const set = <K extends keyof ToolInput>(key: K, value: ToolInput[K]) => setForm((f) => ({ ...f, [key]: value }));
 
   return (
     <form
       className="grid gap-3"
-      onSubmit={async (e) => {
+      onSubmit={(e) => {
         e.preventDefault();
-        setBusy(true);
-        setError(null);
-        try {
-          await onSubmit(form);
-        } catch (err) {
-          setError(errorMessage(err));
-          setBusy(false);
-        }
+        void run(form);
       }}
     >
-      <label>
-        <span className="label">Name</span>
+      <Field label="Name">
         <input
           className="input"
           required
+          autoFocus
           minLength={2}
           maxLength={LIMITS.toolName}
           placeholder="e.g. Cordless drill (18V)"
           value={form.name}
           onChange={(e) => set("name", e.target.value)}
         />
-      </label>
-      <div className="grid grid-cols-2 gap-3">
-        <label>
-          <span className="label">Category</span>
+      </Field>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Field label="Category">
           <select className="input" value={form.category} onChange={(e) => set("category", e.target.value as Category)}>
             {CATEGORIES.map((c) => (
               <option key={c}>{c}</option>
             ))}
           </select>
-        </label>
-        <label>
-          <span className="label">Condition</span>
-          <select
-            className="input capitalize"
-            value={form.condition}
-            onChange={(e) => set("condition", e.target.value as Condition)}
-          >
+        </Field>
+        <Field label="Condition">
+          <select className="input" value={form.condition} onChange={(e) => set("condition", e.target.value as Condition)}>
             {CONDITIONS.map((c) => (
               <option key={c} value={c}>
-                {c[0].toUpperCase() + c.slice(1)}
+                {capitalise(c)}
               </option>
             ))}
           </select>
-        </label>
+        </Field>
       </div>
-      <label>
-        <span className="label">
-          Short description <span className="font-normal text-muted">(optional)</span>
-        </span>
+      <Field label="Short description" optional hint={`${form.description.length}/${LIMITS.toolDescription}`}>
         <textarea
           className="input"
           rows={3}
@@ -88,19 +72,9 @@ export function ToolForm({
           value={form.description}
           onChange={(e) => set("description", e.target.value)}
         />
-        <span className="mt-1 block text-right text-xs text-muted">
-          {form.description.length}/{LIMITS.toolDescription}
-        </span>
-      </label>
+      </Field>
       <ErrorText>{error}</ErrorText>
-      <div className="flex gap-2">
-        <button className="btn-primary" disabled={busy}>
-          {busy ? "Saving…" : submitLabel}
-        </button>
-        <button type="button" className="btn-secondary" onClick={onCancel}>
-          Cancel
-        </button>
-      </div>
+      <FormActions busy={busy} submitLabel={submitLabel} busyLabel="Saving…" onCancel={onCancel} />
     </form>
   );
 }

@@ -5,13 +5,14 @@ import { useState } from "react";
 import { Show, SignInButton } from "@clerk/nextjs";
 import { useQuery } from "convex/react";
 import { api } from "@convex/_generated/api";
-import { CATEGORIES } from "@convex/lib/constants";
+import { CATEGORIES, type Category } from "@convex/lib/constants";
 import { Logo } from "@/components/Logo";
+import { Badge } from "@/components/ui";
 
 export default function Home() {
   // Public query: returns only { name, category } for tools free right now.
   const tools = useQuery(api.tools.listPublic);
-  const [category, setCategory] = useState<string>("All");
+  const [category, setCategory] = useState<Category | "All">("All");
   const visible = tools?.filter((t) => category === "All" || t.category === category);
 
   return (
@@ -53,7 +54,7 @@ export default function Home() {
             aria-label="Filter by category"
             className="input w-auto"
             value={category}
-            onChange={(e) => setCategory(e.target.value)}
+            onChange={(e) => setCategory(e.target.value as Category | "All")}
           >
             <option>All</option>
             {CATEGORIES.map((c) => (
@@ -65,7 +66,7 @@ export default function Home() {
         {visible === undefined ? (
           <ul className="mt-4 grid gap-2 sm:grid-cols-2">
             {Array.from({ length: 4 }).map((_, i) => (
-              <li key={i} className="card h-16 animate-pulse bg-[#f3f0ea]" />
+              <li key={i} className="card h-16 animate-pulse bg-surface-muted" />
             ))}
           </ul>
         ) : visible.length === 0 ? (
@@ -77,7 +78,7 @@ export default function Home() {
             {visible.map((t, i) => (
               <li key={`${t.name}-${i}`} className="card flex items-center justify-between">
                 <span className="font-medium">{t.name}</span>
-                <span className="rounded-full bg-accent-soft px-2.5 py-0.5 text-xs text-accent">{t.category}</span>
+                <Badge tone="green">{t.category}</Badge>
               </li>
             ))}
           </ul>
