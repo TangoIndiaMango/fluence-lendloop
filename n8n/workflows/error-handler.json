@@ -1,0 +1,136 @@
+{
+  "id": "LLerrorHandler01",
+  "name": "LendLoop · Error handler",
+  "active": true,
+  "nodes": [
+    {
+      "id": "cbf6a5ec-67ef-45c4-a89c-c7352b7fc45d",
+      "name": "On workflow error",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        300
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "b88550a0-d0c7-4265-a935-fe56b9afab8d",
+      "name": "Summarise error",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        300
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Error workflow: keep only what an operator needs (no item data, which\n// could contain personal details), sign it for Convex, and build an alert.\nconst crypto = require('crypto');\nconst SECRET = $env.HMAC_SECRET_N8N_TO_CONVEX;\n\nconst e = $input.first().json;\nconst summary = {\n  executionId: String((e.execution && e.execution.id) || (e.trigger && 'trigger') || 'unknown'),\n  workflowName: (e.workflow && e.workflow.name) || 'unknown workflow',\n  nodeName: (e.execution && e.execution.lastNodeExecuted) || 'unknown node',\n  message: String((e.execution && e.execution.error && e.execution.error.message) ||\n    (e.trigger && e.trigger.error && e.trigger.error.message) || 'unknown error').slice(0, 300),\n};\n\nconst body = JSON.stringify(summary);\nconst timestamp = String(Math.floor(Date.now() / 1000));\nconst signature = SECRET\n  ? 'sha256=' + crypto.createHmac('sha256', SECRET).update(`${timestamp}.${body}`).digest('hex')\n  : '';\n\nreturn [\n  {\n    json: {\n      body,\n      timestamp,\n      signature,\n      mail: {\n        From: { Email: $env.LENDLOOP_MAIL_FROM || 'notifications@lendloop.local', Name: 'LendLoop automation' },\n        To: [{ Email: $env.LENDLOOP_OPS_EMAIL || 'ops@lendloop.local', Name: 'LendLoop ops' }],\n        Subject: `[LendLoop] ${summary.workflowName} failed at \"${summary.nodeName}\"`,\n        Text:\n          `${summary.message}\\n\\nExecution: ${summary.executionId}\\n` +\n          `Open n8n to inspect and retry: ${$env.N8N_EDITOR_BASE_URL || 'http://localhost:5678'}`,\n        Tags: ['lendloop', 'workflow-error'],\n      },\n    },\n  },\n];\n"
+      }
+    },
+    {
+      "id": "5b16c1be-209b-4795-a142-877b60e91765",
+      "name": "Alert ops by email",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        440,
+        200
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.LENDLOOP_MAIL_API_URL }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.mail) }}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "id": "90f1e8ac-459d-41ff-a249-a652054e496a",
+      "name": "Report to Convex",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        440,
+        400
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.LENDLOOP_CONVEX_SITE_URL }}/automation/workflow-error",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-lendloop-timestamp",
+              "value": "={{ $json.timestamp }}"
+            },
+            {
+              "name": "x-lendloop-signature",
+              "value": "={{ $json.signature }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $json.body }}",
+        "options": {
+          "timeout": 10000,
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "responseFormat": "text"
+            }
+          }
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    }
+  ],
+  "connections": {
+    "On workflow error": {
+      "main": [
+        [
+          {
+            "node": "Summarise error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Summarise error": {
+      "main": [
+        [
+          {
+            "node": "Alert ops by email",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Report to Convex",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "tags": []
+}

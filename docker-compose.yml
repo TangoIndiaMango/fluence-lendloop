@@ -1,0 +1,69 @@
+# Local automation stack: n8n + Mailpit (a fake inbox standing in for an
+# email provider). Values come from ./.env — see .env.example.
+name: lendloop
+
+x-n8n: &n8n
+  image: n8nio/n8n:2.47.7
+  volumes:
+    - n8n_data:/home/node/.n8n
+    - ./n8n/workflows:/workflows:ro
+  extra_hosts:
+    - "host.docker.internal:host-gateway" # lets n8n reach a local Convex on Linux too
+  environment:
+    N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY:?Set N8N_ENCRYPTION_KEY in .env}
+    GENERIC_TIMEZONE: UTC
+    TZ: UTC
+    N8N_DIAGNOSTICS_ENABLED: "false"
+    N8N_PERSONALIZATION_ENABLED: "false"
+    N8N_SECURE_COOKIE: "false" # localhost over http only; enable behind TLS
+    N8N_EDITOR_BASE_URL: http://localhost:5678
+    WEBHOOK_URL: ${N8N_PUBLIC_WEBHOOK_BASE:-http://localhost:5678/}
+    # Code nodes need crypto for HMAC and read secrets from env, so the
+    # secrets never appear in workflow JSON.
+    NODE_FUNCTION_ALLOW_BUILTIN: crypto
+    N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"
+    EXECUTIONS_DATA_PRUNE: "true"
+    EXECUTIONS_DATA_MAX_AGE: "168" # hours; executions can contain emails
+    # LendLoop
+    HMAC_SECRET_CONVEX_TO_N8N: ${HMAC_SECRET_CONVEX_TO_N8N:?Set HMAC_SECRET_CONVEX_TO_N8N in .env}
+    HMAC_SECRET_N8N_TO_CONVEX: ${HMAC_SECRET_N8N_TO_CONVEX:?Set HMAC_SECRET_N8N_TO_CONVEX in .env}
+    LENDLOOP_CONVEX_SITE_URL: ${LENDLOOP_CONVEX_SITE_URL:-http://host.docker.internal:3211}
+    LENDLOOP_APP_URL: ${LENDLOOP_APP_URL:-http://localhost:3000}
+    LENDLOOP_MAIL_API_URL: ${LENDLOOP_MAIL_API_URL:-http://mailpit:8025/api/v1/send}
+    LENDLOOP_MAIL_FROM: ${LENDLOOP_MAIL_FROM:-notifications@lendloop.local}
+    LENDLOOP_OPS_EMAIL: ${LENDLOOP_OPS_EMAIL:-ops@lendloop.local}
+
+services:
+  mailpit:
+    image: axllent/mailpit:v1.27
+    ports:
+      - "8025:8025" # inbox UI: http://localhost:8025
+    restart: unless-stopped
+
+  # One-shot: (re)imports the workflows in ./n8n/workflows on every `up`, so
+  # the repo stays the source of truth. Edits made in the n8n UI are
+  # overwritten on the next `up` unless you export them back.
+  n8n-import:
+    <<: *n8n
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >-
+        n8n import:workflow --separate --input=/workflows &&
+        n8n publish:workflow --id=LLrequestNotify1 &&
+        n8n publish:workflow --id=LLoverdueRemind1 &&
+        n8n publish:workflow --id=LLerrorHandler01
+    restart: "no"
+
+  n8n:
+    <<: *n8n
+    ports:
+      - "5678:5678" # editor: http://localhost:5678
+    depends_on:
+      n8n-import:
+        condition: service_completed_successfully
+      mailpit:
+        condition: service_started
+    restart: unless-stopped
+
+volumes:
+  n8n_data:
