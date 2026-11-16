@@ -33,4 +33,7 @@ export const LIMITS = {
   maxBookAheadDays: 90,
   maxListingsPerUser: 50,
   maxOpenRequestsPerBorrower: 10,
+  imageMaxBytes: 5 * 1024 * 1024,
 } as const;
+
+export const IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"] as const;

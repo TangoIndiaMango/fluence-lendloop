@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useState } from "react";
 import type { api } from "@convex/_generated/api";
 import { RequestForm } from "@/components/loans/RequestForm";
+import { ToolImage } from "./CategoryArt";
 import { ActionButton, AvailabilityBadge, TrustedBadge } from "@/components/ui";
 import { formatRange } from "@/lib/format";
 
@@ -23,7 +24,13 @@ export function ToolCard({
   const { booked } = tool.availability;
 
   return (
-    <li className="card flex flex-col">
+    <li className="card flex flex-col overflow-hidden">
+      <ToolImage
+        src={tool.imageUrl}
+        category={tool.category}
+        name={tool.name}
+        className="-mx-4 -mt-4 mb-3 h-36 w-[calc(100%+2rem)] max-w-none"
+      />
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h2 className="font-semibold">{tool.name}</h2>

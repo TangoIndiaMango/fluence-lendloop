@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
+import { ToolImage } from "@/components/tools/CategoryArt";
 import { ToolForm } from "@/components/tools/ToolForm";
 import { ActionButton, AvailabilityBadge, Empty, PageHeader, Skeleton } from "@/components/ui";
 import { plural } from "@/lib/format";
@@ -34,8 +35,8 @@ function Listings() {
           <h2 className="mb-3 font-semibold">List a tool</h2>
           <ToolForm
             submitLabel="Publish listing"
-            onSubmit={async (input) => {
-              await create(input);
+            onSubmit={async ({ imageId, ...input }) => {
+              await create({ ...input, imageId: imageId ?? undefined });
               closeCreate();
             }}
             onCancel={closeCreate}
@@ -61,6 +62,7 @@ function Listings() {
               {editing === t._id ? (
                 <ToolForm
                   initial={{ name: t.name, category: t.category, condition: t.condition, description: t.description }}
+                  initialImageUrl={t.imageUrl}
                   submitLabel="Save changes"
                   onSubmit={async (input) => {
                     await update({ toolId: t._id, ...input });
@@ -69,7 +71,8 @@ function Listings() {
                   onCancel={() => setEditing(null)}
                 />
               ) : (
-                <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="flex flex-wrap items-start gap-3 sm:flex-nowrap">
+                  <ToolImage src={t.imageUrl} category={t.category} name={t.name} className="h-20 w-24 shrink-0 rounded-lg" />
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <h2 className="font-semibold">{t.name}</h2>

@@ -1,61 +1,26 @@
 import { v } from "convex/values";
-import type { Doc, Id } from "./_generated/dataModel";
-import { mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
+import { mutation, query } from "./_generated/server";
 import { firstName, isAdmin, requireViewer } from "./lib/auth";
 import { LIMITS } from "./lib/constants";
 import { todayUtc } from "./lib/dates";
 import { fail } from "./lib/errors";
 import { loansForTool } from "./model/loans";
+import {
+  activeTools,
+  assertUsableImage,
+  availabilityOf,
+  cleanToolInput,
+  imageUrl,
+  loadActiveTool,
+} from "./model/tools";
 import { enqueueLoanEvent } from "./notifications";
 import { category, condition } from "./schema";
 
-type Range = { startDate: string; endDate: string };
-type Availability =
-  | { state: "available"; booked: Range[] }
-  | { state: "on_loan"; until: string; overdue: boolean; booked: Range[] };
-
-const MAX_BOOKED_SHOWN = 3;
-
-async function availabilityOf(
-  ctx: QueryCtx,
-  toolId: Id<"tools">,
-  today: string,
-): Promise<Availability> {
-  const approved = await loansForTool(ctx, toolId, "approved");
-  // Upcoming approved ranges, so borrowers can pick free dates up front
-  // instead of discovering a clash on submit.
-  const booked = approved
-    .filter((l) => l.startDate > today)
-    .sort((a, b) => a.startDate.localeCompare(b.startDate))
-    .slice(0, MAX_BOOKED_SHOWN)
-    .map(({ startDate, endDate }) => ({ startDate, endDate }));
-  const current = approved.find((l) => l.startDate <= today);
-  if (current) {
-    return { state: "on_loan", until: current.endDate, overdue: current.endDate < today, booked };
-  }
-  return { state: "available", booked };
-}
-
-/** Load an active listing; NOT_FOUND if missing or removed. */
-async function loadActiveTool(ctx: MutationCtx, toolId: Id<"tools">) {
-  const tool = await ctx.db.get(toolId);
-  if (!tool || tool.removedAt !== undefined) fail("NOT_FOUND", "Listing not found.");
-  return tool;
-}
-
-async function activeTools(ctx: QueryCtx, cat?: Doc<"tools">["category"]) {
-  return await ctx.db
-    .query("tools")
-    .withIndex("by_removed_category", (q) =>
-      cat ? q.eq("removedAt", undefined).eq("category", cat) : q.eq("removedAt", undefined),
-    )
-    .order("desc")
-    .take(200);
-}
+// Public tool API. Rules and helpers live in ./model/tools.
 
 /**
  * Public, unauthenticated. Returns ONLY name and category of tools that are
- * available right now: no ids, owner, description or dates.
+ * available right now: no ids, owner, description, photo or dates.
  */
 export const listPublic = query({
   args: {},
@@ -78,18 +43,23 @@ export const list = query({
     const tools = await activeTools(ctx, args.category);
     return await Promise.all(
       tools.map(async (t) => {
-        const owner = await ctx.db.get(t.ownerId);
+        const [owner, availability, image] = await Promise.all([
+          ctx.db.get(t.ownerId),
+          availabilityOf(ctx, t._id, today),
+          imageUrl(ctx, t),
+        ]);
         return {
           _id: t._id,
           name: t.name,
           category: t.category,
           condition: t.condition,
           description: t.description,
+          imageUrl: image,
           // Minimal owner info: first name and the trust badge, never email.
           ownerFirstName: owner ? firstName(owner.name) : "Neighbour",
           ownerTrusted: owner?.trustedLender ?? false,
           isMine: t.ownerId === viewer._id,
-          availability: await availabilityOf(ctx, t._id, today),
+          availability,
         };
       }),
     );
@@ -101,44 +71,47 @@ export const mine = query({
   handler: async (ctx) => {
     const viewer = await requireViewer(ctx);
     const today = todayUtc();
-    const tools = await ctx.db
-      .query("tools")
-      .withIndex("by_owner", (q) => q.eq("ownerId", viewer._id))
-      .order("desc")
-      .collect();
+    const tools = (
+      await ctx.db
+        .query("tools")
+        .withIndex("by_owner", (q) => q.eq("ownerId", viewer._id))
+        .order("desc")
+        .collect()
+    ).filter((t) => t.removedAt === undefined);
     return await Promise.all(
-      tools
-        .filter((t) => t.removedAt === undefined)
-        .map(async (t) => {
-          const pending = await loansForTool(ctx, t._id, "pending");
-          return {
-            _id: t._id,
-            name: t.name,
-            category: t.category,
-            condition: t.condition,
-            description: t.description,
-            pendingRequests: pending.length,
-            availability: await availabilityOf(ctx, t._id, today),
-          };
-        }),
+      tools.map(async (t) => {
+        const [pending, availability, image] = await Promise.all([
+          loansForTool(ctx, t._id, "pending"),
+          availabilityOf(ctx, t._id, today),
+          imageUrl(ctx, t),
+        ]);
+        return {
+          _id: t._id,
+          name: t.name,
+          category: t.category,
+          condition: t.condition,
+          description: t.description,
+          imageId: t.imageId ?? null,
+          imageUrl: image,
+          pendingRequests: pending.length,
+          availability,
+        };
+      }),
     );
   },
 });
 
-function cleanToolInput(input: { name: string; description: string }) {
-  const name = input.name.trim();
-  const description = input.description.trim();
-  if (name.length < 2 || name.length > LIMITS.toolName) {
-    fail("INVALID_INPUT", `Name must be 2–${LIMITS.toolName} characters.`);
-  }
-  if (description.length > LIMITS.toolDescription) {
-    fail("INVALID_INPUT", `Description must be at most ${LIMITS.toolDescription} characters.`);
-  }
-  return { name, description };
-}
+/** Short-lived URL the browser uploads a listing photo to. */
+export const generateUploadUrl = mutation({
+  args: {},
+  handler: async (ctx) => {
+    await requireViewer(ctx);
+    return await ctx.storage.generateUploadUrl();
+  },
+});
 
 export const create = mutation({
-  args: { name: v.string(), category, condition, description: v.string() },
+  args: { name: v.string(), category, condition, description: v.string(), imageId: v.optional(v.id("_storage")) },
   handler: async (ctx, args) => {
     const viewer = await requireViewer(ctx);
     const { name, description } = cleanToolInput(args);
@@ -149,18 +122,23 @@ export const create = mutation({
     if (existing.filter((t) => t.removedAt === undefined).length >= LIMITS.maxListingsPerUser) {
       fail("LIMIT_REACHED", `You can have at most ${LIMITS.maxListingsPerUser} listings.`);
     }
+    if (args.imageId) await assertUsableImage(ctx, args.imageId);
     return await ctx.db.insert("tools", {
       ownerId: viewer._id,
       name,
       category: args.category,
       condition: args.condition,
       description,
+      imageId: args.imageId,
       updatedAt: Date.now(),
     });
   },
 });
 
-/** Owners only. Admins moderate by removing, not by editing others' text. */
+/**
+ * Owners only. Admins moderate by removing, not by editing others' text.
+ * `imageId`: omit to keep the photo, null to remove it, an id to replace it.
+ */
 export const update = mutation({
   args: {
     toolId: v.id("tools"),
@@ -168,26 +146,34 @@ export const update = mutation({
     category,
     condition,
     description: v.string(),
+    imageId: v.optional(v.union(v.id("_storage"), v.null())),
   },
   handler: async (ctx, args) => {
     const viewer = await requireViewer(ctx);
     const tool = await loadActiveTool(ctx, args.toolId);
     if (tool.ownerId !== viewer._id) fail("FORBIDDEN", "You can only edit your own listings.");
     const { name, description } = cleanToolInput(args);
+
+    const imageChanged = args.imageId !== undefined && args.imageId !== (tool.imageId ?? null);
+    if (imageChanged && args.imageId) await assertUsableImage(ctx, args.imageId, tool._id);
+
     await ctx.db.patch(tool._id, {
       name,
       description,
       category: args.category,
       condition: args.condition,
+      ...(imageChanged ? { imageId: args.imageId ?? undefined } : {}),
       updatedAt: Date.now(),
     });
+    // Don't keep files nobody can see.
+    if (imageChanged && tool.imageId) await ctx.storage.delete(tool.imageId);
   },
 });
 
 /**
  * Owner removes their own listing; admin can remove any. Soft delete so loan
- * history survives. Pending requests are declined (and the borrowers told);
- * an active loan stays visible so it can still be marked returned.
+ * history survives; the photo is deleted. Pending requests are declined (and
+ * the borrowers told); an active loan stays visible so it can be returned.
  */
 export const remove = mutation({
   args: { toolId: v.id("tools") },
@@ -198,7 +184,8 @@ export const remove = mutation({
       fail("FORBIDDEN", "You can only remove your own listings.");
     }
     const now = Date.now();
-    await ctx.db.patch(toolId, { removedAt: now, removedBy: viewer._id });
+    await ctx.db.patch(toolId, { removedAt: now, removedBy: viewer._id, imageId: undefined });
+    if (tool.imageId) await ctx.storage.delete(tool.imageId);
 
     for (const loan of await loansForTool(ctx, toolId, "pending")) {
       await ctx.db.patch(loan._id, { status: "declined", decidedAt: now });

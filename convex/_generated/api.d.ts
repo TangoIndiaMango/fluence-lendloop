@@ -17,6 +17,7 @@ import type * as lib_errors from "../lib/errors.js";
 import type * as lib_hmac from "../lib/hmac.js";
 import type * as loans from "../loans.js";
 import type * as model_loans from "../model/loans.js";
+import type * as model_tools from "../model/tools.js";
 import type * as notifications from "../notifications.js";
 import type * as seed from "../seed.js";
 import type * as tools from "../tools.js";
@@ -38,6 +39,7 @@ declare const fullApi: ApiFromModules<{
   "lib/hmac": typeof lib_hmac;
   loans: typeof loans;
   "model/loans": typeof model_loans;
+  "model/tools": typeof model_tools;
   notifications: typeof notifications;
   seed: typeof seed;
   tools: typeof tools;

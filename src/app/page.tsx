@@ -7,6 +7,7 @@ import { useQuery } from "convex/react";
 import { api } from "@convex/_generated/api";
 import { CATEGORIES, type Category } from "@convex/lib/constants";
 import { Logo } from "@/components/Logo";
+import { CategoryArt } from "@/components/tools/CategoryArt";
 import { Badge } from "@/components/ui";
 
 export default function Home() {
@@ -76,8 +77,9 @@ export default function Home() {
         ) : (
           <ul className="mt-4 grid gap-2 sm:grid-cols-2">
             {visible.map((t, i) => (
-              <li key={`${t.name}-${i}`} className="card flex items-center justify-between">
-                <span className="font-medium">{t.name}</span>
+              <li key={`${t.name}-${i}`} className="card flex items-center gap-3 p-3">
+                <CategoryArt category={t.category} className="h-12 w-12 shrink-0 rounded-lg" />
+                <span className="min-w-0 flex-1 truncate font-medium">{t.name}</span>
                 <Badge tone="green">{t.category}</Badge>
               </li>
             ))}

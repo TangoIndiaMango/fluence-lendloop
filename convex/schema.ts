@@ -65,13 +65,17 @@ export default defineSchema({
     category,
     condition,
     description: v.string(),
+    // Optional photo in Convex file storage. Only signed-in users see it;
+    // the public page shows a category illustration instead.
+    imageId: v.optional(v.id("_storage")),
     updatedAt: v.number(),
     // Soft delete keeps loan history intact.
     removedAt: v.optional(v.number()),
     removedBy: v.optional(v.id("users")),
   })
     .index("by_owner", ["ownerId"])
-    .index("by_removed_category", ["removedAt", "category"]),
+    .index("by_removed_category", ["removedAt", "category"])
+    .index("by_image", ["imageId"]),
 
   loans: defineTable({
     toolId: v.id("tools"),

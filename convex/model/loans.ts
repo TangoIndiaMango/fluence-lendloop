@@ -95,7 +95,15 @@ export async function presentLoan(ctx: QueryCtx, loan: Doc<"loans">, viewerId: I
     endDate: loan.endDate,
     message: loan.message ?? null,
     overdue: loan.status === "approved" && loan.endDate < todayUtc(),
-    tool: tool ? { _id: tool._id, name: tool.name, category: tool.category, removed: tool.removedAt !== undefined } : null,
+    tool: tool
+      ? {
+          _id: tool._id,
+          name: tool.name,
+          category: tool.category,
+          removed: tool.removedAt !== undefined,
+          imageUrl: tool.imageId ? await ctx.storage.getUrl(tool.imageId) : null,
+        }
+      : null,
     owner: owner
       ? {
           firstName: firstName(owner.name),

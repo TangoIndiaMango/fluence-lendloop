@@ -4,6 +4,7 @@ import type { FunctionReturnType } from "convex/server";
 import type { ReactNode } from "react";
 import type { api } from "@convex/_generated/api";
 import { ActivityLine, StatusBadge, TrustedBadge } from "@/components/ui";
+import { ToolImage } from "@/components/tools/CategoryArt";
 import { formatRange } from "@/lib/format";
 
 export type Loan = FunctionReturnType<typeof api.loans.myRequests>[number];
@@ -22,7 +23,15 @@ export function LoanCard({ loan, perspective, actions }: { loan: Loan; perspecti
 
   return (
     <li className="card">
-      <div className="flex flex-wrap items-start justify-between gap-3">
+      <div className="flex flex-wrap items-start gap-3 sm:flex-nowrap">
+        {loan.tool && (
+          <ToolImage
+            src={loan.tool.imageUrl}
+            category={loan.tool.category}
+            name={loan.tool.name}
+            className="h-14 w-14 shrink-0 rounded-lg"
+          />
+        )}
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <h3 className="font-semibold">{loan.tool?.name ?? "Removed tool"}</h3>
