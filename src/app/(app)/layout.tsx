@@ -31,9 +31,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             <UserButton />
           </div>
         </div>
-        <AppNav isAdmin={me?.role === "admin"} pendingIncoming={pendingIncoming} />
+        <AppNav variant="top" isAdmin={me?.role === "admin"} pendingIncoming={pendingIncoming} />
       </header>
-      <main id="main" className="mx-auto w-full max-w-5xl flex-1 px-4 py-6">
+      <main id="main" className="mx-auto w-full max-w-5xl flex-1 px-4 pt-6 pb-24 sm:pb-6">
         {isLoading ? (
           <Skeleton rows={3} />
         ) : !isAuthenticated ? (
@@ -56,6 +56,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           </>
         )}
       </main>
+      <AppNav variant="bottom" isAdmin={me?.role === "admin"} pendingIncoming={pendingIncoming} />
     </div>
   );
 }

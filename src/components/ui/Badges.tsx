@@ -41,7 +41,7 @@ export function AvailabilityBadge({ availability }: { availability: Availability
 }
 
 export function TrustedBadge() {
-  return <span className="font-medium text-accent">✓ Trusted Lender</span>;
+  return <span className="whitespace-nowrap font-medium text-accent">✓ Trusted Lender</span>;
 }
 
 type Activity = { kind: string; detail: string; at: number } | null;

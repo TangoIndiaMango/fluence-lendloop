@@ -33,7 +33,7 @@ export function ToolFilterBar({
       <div className="flex flex-wrap items-center gap-3">
         <input
           type="search"
-          className="input max-w-xs"
+          className="input sm:max-w-xs"
           placeholder="Search tools…"
           aria-label="Search tools"
           value={q}
@@ -49,7 +49,11 @@ export function ToolFilterBar({
           Available now
         </label>
       </div>
-      <div className="flex flex-wrap gap-1.5" role="group" aria-label="Filter by category">
+      <div
+        className="-mx-4 flex gap-1.5 overflow-x-auto px-4 pb-1 [scrollbar-width:none] sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0 sm:pb-0"
+        role="group"
+        aria-label="Filter by category"
+      >
         {[undefined, ...CATEGORIES].map((c) => {
           const active = filters.category === c;
           return (
@@ -57,7 +61,7 @@ export function ToolFilterBar({
               key={c ?? "all"}
               onClick={() => onChange({ category: c })}
               aria-pressed={active}
-              className={`chip ${active ? "border-accent bg-accent text-white" : "border-border bg-card hover:bg-surface-muted"}`}
+              className={`chip shrink-0 whitespace-nowrap ${active ? "border-accent bg-accent text-white" : "border-border bg-card hover:bg-surface-muted"}`}
             >
               {c ?? "All"}
             </button>

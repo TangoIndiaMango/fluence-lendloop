@@ -71,24 +71,26 @@ function Listings() {
                   onCancel={() => setEditing(null)}
                 />
               ) : (
-                <div className="flex flex-wrap items-start gap-3 sm:flex-nowrap">
-                  <ToolImage src={t.imageUrl} category={t.category} name={t.name} className="h-20 w-24 shrink-0 rounded-lg" />
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <h2 className="font-semibold">{t.name}</h2>
-                      <AvailabilityBadge availability={t.availability} />
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
+                  <div className="flex min-w-0 flex-1 items-start gap-3">
+                    <ToolImage src={t.imageUrl} category={t.category} name={t.name} className="h-20 w-24 shrink-0 rounded-lg" />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h2 className="font-semibold">{t.name}</h2>
+                        <AvailabilityBadge availability={t.availability} />
+                      </div>
+                      <p className="text-xs text-muted">
+                        {t.category} · {t.condition} condition
+                      </p>
+                      {t.description && <p className="mt-2 text-sm">{t.description}</p>}
+                      {t.pendingRequests > 0 && (
+                        <Link href="/incoming" className="focus-ring mt-2 inline-block rounded text-sm font-medium text-accent underline">
+                          {plural(t.pendingRequests, "pending request")}
+                        </Link>
+                      )}
                     </div>
-                    <p className="text-xs text-muted">
-                      {t.category} · {t.condition} condition
-                    </p>
-                    {t.description && <p className="mt-2 text-sm">{t.description}</p>}
-                    {t.pendingRequests > 0 && (
-                      <Link href="/incoming" className="focus-ring mt-2 inline-block rounded text-sm font-medium text-accent underline">
-                        {plural(t.pendingRequests, "pending request")}
-                      </Link>
-                    )}
                   </div>
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex flex-wrap gap-2 sm:shrink-0">
                     <button className="btn-secondary" onClick={() => setEditing(t._id)}>
                       Edit
                     </button>
