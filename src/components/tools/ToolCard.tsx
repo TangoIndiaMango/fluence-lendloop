@@ -24,7 +24,7 @@ export function ToolCard({
   const { booked } = tool.availability;
 
   return (
-    <li className="card flex flex-col overflow-hidden">
+    <li className="card flex flex-col overflow-hidden transition-shadow hover:shadow-raised">
       <ToolImage
         src={tool.imageUrl}
         category={tool.category}

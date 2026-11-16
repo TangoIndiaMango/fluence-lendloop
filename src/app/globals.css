@@ -1,17 +1,26 @@
 @import "tailwindcss";
 
-/* Design tokens. Components use these names, never raw hex values. */
+/*
+ * Design tokens, from the tweakcn "Nature" theme (tweakcn.com/r/themes/nature),
+ * mapped onto the names the components already use. Light mode only for
+ * now: the status tints in Badges and CategoryArt are light-only.
+ * Change the theme here; components never use raw colour values.
+ */
 :root {
-  --background: #faf8f4;
-  --foreground: #1f2421;
-  --muted: #6b716c;
-  --card: #ffffff;
-  --surface-muted: #f3f0ea;
-  --border: #e6e1d8;
-  --accent: #2f6b4f;
-  --accent-hover: #25573f;
-  --accent-soft: #e5f0ea;
-  --accent-line: #c7dfd2;
+  color-scheme: light;
+  --background: oklch(0.97 0.01 80.72);
+  --foreground: oklch(0.3 0.04 30.2);
+  --muted: oklch(0.45 0.05 39.21); /* tweakcn: muted-foreground */
+  --card: oklch(0.995 0.004 80.72); /* a touch lighter than the page so cards lift */
+  --surface-muted: oklch(0.94 0.01 74.42); /* tweakcn: muted */
+  --border: oklch(0.88 0.02 74.64);
+  --accent: oklch(0.52 0.13 144.17); /* tweakcn: primary */
+  --accent-hover: oklch(0.43 0.12 144.31); /* tweakcn: secondary-foreground */
+  --accent-soft: oklch(0.96 0.02 147.64); /* tweakcn: secondary */
+  --accent-line: oklch(0.9 0.05 146.04); /* tweakcn: accent */
+  --radius: 0.5rem;
+  --shadow-card: 0 1px 3px 0px hsl(0 0% 0% / 0.08), 0 1px 2px -1px hsl(0 0% 0% / 0.08);
+  --shadow-raised: 0 1px 3px 0px hsl(0 0% 0% / 0.1), 0 4px 6px -1px hsl(0 0% 0% / 0.1);
 }
 
 @theme inline {
@@ -25,7 +34,11 @@
   --color-accent-hover: var(--accent-hover);
   --color-accent-soft: var(--accent-soft);
   --color-accent-line: var(--accent-line);
-  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --shadow-card: var(--shadow-card);
+  --shadow-raised: var(--shadow-raised);
+  --font-sans: var(--font-app-sans), ui-sans-serif, system-ui, sans-serif;
 }
 
 body {
@@ -43,7 +56,7 @@ body {
   @apply focus-ring inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg px-3.5 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50;
 }
 @utility btn-primary {
-  @apply btn bg-accent text-white hover:bg-accent-hover;
+  @apply btn bg-accent text-white shadow-card hover:bg-accent-hover;
 }
 @utility btn-secondary {
   @apply btn border border-border bg-card hover:bg-surface-muted;
@@ -64,7 +77,7 @@ body {
   @apply mb-1 block text-sm font-medium;
 }
 @utility card {
-  @apply rounded-xl border border-border bg-card p-4;
+  @apply rounded-xl border border-border bg-card p-4 shadow-card;
 }
 @utility section-title {
   @apply mb-2 text-sm font-semibold uppercase tracking-wide text-muted;
