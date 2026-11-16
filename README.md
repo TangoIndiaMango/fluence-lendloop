@@ -171,6 +171,8 @@ It checks that unsigned, forged and stale calls are rejected, that a valid call 
 - `lib/errors.ts` turns the server's `{ code, message }` into UI text; `lib/format.ts` holds date and text helpers.
 - Pages stay thin: fetch, compose components, wire actions.
 
+**Photos:** owners upload a photo straight to Convex storage. The server checks type (JPEG, PNG or WebP) and size (5 MB) from storage metadata rather than trusting the browser, deletes rejected or replaced files, and won't let one listing reuse another's file. The seeded demo tools link free [Unsplash](https://unsplash.com/license) photos from the Unsplash CDN; only `images.unsplash.com` links are accepted, and only internal functions can set them (`npx convex run seed:photos`). Listings without a photo get a category illustration. The public page shows only the illustration, so it still exposes nothing but name and category.
+
 **Browse filters:** category is filtered in Convex through the `by_removed_category` index; text search and "available now" are applied to the loaded list. All three live in the URL (`?category=Garden&q=hedge&available=1`), so refresh, back and shared links keep them. Borrowers see upcoming booked ranges on each card, and the request form flags a clash before submitting (the server still re-checks).
 
 **n8n** (`n8n/`)

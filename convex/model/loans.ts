@@ -4,6 +4,7 @@ import { firstName, requireViewer } from "../lib/auth";
 import { LIMITS, type LoanStatus } from "../lib/constants";
 import { addDays, daysBetween, isValidIsoDate, rangesOverlap, todayUtc } from "../lib/dates";
 import { fail } from "../lib/errors";
+import { imageUrl } from "./tools";
 
 // Loan business rules, shared by the public functions in convex/loans.ts and
 // by tools.ts. Plain functions that take ctx: easy to read, reuse and test.
@@ -101,7 +102,7 @@ export async function presentLoan(ctx: QueryCtx, loan: Doc<"loans">, viewerId: I
           name: tool.name,
           category: tool.category,
           removed: tool.removedAt !== undefined,
-          imageUrl: tool.imageId ? await ctx.storage.getUrl(tool.imageId) : null,
+          imageUrl: await imageUrl(ctx, tool),
         }
       : null,
     owner: owner

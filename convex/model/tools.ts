@@ -2,6 +2,7 @@ import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
 import { IMAGE_TYPES, LIMITS } from "../lib/constants";
 import { fail } from "../lib/errors";
+import { sizedPhotoUrl } from "../lib/photos";
 import { loansForTool } from "./loans";
 
 // Tool business rules shared by the public functions in convex/tools.ts.
@@ -76,6 +77,8 @@ export async function assertUsableImage(ctx: MutationCtx, storageId: Id<"_storag
   if (user && user._id !== forTool) fail("FORBIDDEN", "That photo belongs to another listing.");
 }
 
+/** The owner's uploaded photo wins; otherwise a linked demo photo; else null. */
 export async function imageUrl(ctx: QueryCtx, tool: Doc<"tools">) {
-  return tool.imageId ? await ctx.storage.getUrl(tool.imageId) : null;
+  if (tool.imageId) return await ctx.storage.getUrl(tool.imageId);
+  return tool.photoUrl ? sizedPhotoUrl(tool.photoUrl) : null;
 }

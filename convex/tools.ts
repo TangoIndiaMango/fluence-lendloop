@@ -154,7 +154,9 @@ export const update = mutation({
     if (tool.ownerId !== viewer._id) fail("FORBIDDEN", "You can only edit your own listings.");
     const { name, description } = cleanToolInput(args);
 
-    const imageChanged = args.imageId !== undefined && args.imageId !== (tool.imageId ?? null);
+    // "Remove photo" on a listing that only has a linked photo clears the link.
+    const imageChanged =
+      args.imageId !== undefined && (args.imageId !== (tool.imageId ?? null) || (args.imageId === null && !!tool.photoUrl));
     if (imageChanged && args.imageId) await assertUsableImage(ctx, args.imageId, tool._id);
 
     await ctx.db.patch(tool._id, {
@@ -162,7 +164,7 @@ export const update = mutation({
       description,
       category: args.category,
       condition: args.condition,
-      ...(imageChanged ? { imageId: args.imageId ?? undefined } : {}),
+      ...(imageChanged ? { imageId: args.imageId ?? undefined, photoUrl: undefined } : {}),
       updatedAt: Date.now(),
     });
     // Don't keep files nobody can see.

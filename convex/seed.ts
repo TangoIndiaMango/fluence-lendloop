@@ -2,6 +2,8 @@ import { v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import { internalMutation } from "./_generated/server";
 import { addDays, todayUtc } from "./lib/dates";
+import { fail } from "./lib/errors";
+import { DEMO_PHOTOS, isAllowedPhotoUrl } from "./lib/photos";
 import { enqueueLoanEvent } from "./notifications";
 
 /**
@@ -39,7 +41,16 @@ export const demo = internalMutation({
       category: Doc<"tools">["category"],
       condition: Doc<"tools">["condition"],
       description: string,
-    ) => ctx.db.insert("tools", { ownerId, name, category, condition, description, updatedAt: Date.now() });
+    ) =>
+      ctx.db.insert("tools", {
+        ownerId,
+        name,
+        category,
+        condition,
+        description,
+        photoUrl: DEMO_PHOTOS[name],
+        updatedAt: Date.now(),
+      });
     const drill = await tool(ada, "Cordless drill (18V)", "Power tools", "good", "Two batteries and a charger. Please return charged.");
     const ladder = await tool(ada, "Extension ladder, 5m", "Ladders & access", "fair", "Heavy; you'll need a car.");
     await tool(bayo, "Hedge trimmer", "Garden", "good", "Electric, 15m cable.");
@@ -69,5 +80,31 @@ export const demo = internalMutation({
     });
     if (notify) await enqueueLoanEvent(ctx, pending, "request.created");
     return "Seeded 3 neighbours, 5 tools, 1 pending request and 1 overdue loan.";
+  },
+});
+
+/**
+ * Give existing listings their demo photos (by tool name), or set one link:
+ *   npx convex run seed:photos
+ *   npx convex run seed:photos '{"toolId":"…","url":"https://images.unsplash.com/photo-…"}'
+ * Listings with an uploaded photo are left alone.
+ */
+export const photos = internalMutation({
+  args: { toolId: v.optional(v.id("tools")), url: v.optional(v.string()) },
+  handler: async (ctx, { toolId, url }) => {
+    if (toolId) {
+      if (!url || !isAllowedPhotoUrl(url)) fail("INVALID_INPUT", "url must be an https://images.unsplash.com/photo-… link");
+      await ctx.db.patch(toolId, { photoUrl: url });
+      return "Photo set.";
+    }
+    let updated = 0;
+    for (const tool of await ctx.db.query("tools").collect()) {
+      const link = DEMO_PHOTOS[tool.name];
+      if (link && !tool.imageId && tool.removedAt === undefined && tool.photoUrl !== link) {
+        await ctx.db.patch(tool._id, { photoUrl: link });
+        updated++;
+      }
+    }
+    return `Linked photos on ${updated} listing(s).`;
   },
 });

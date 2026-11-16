@@ -68,6 +68,9 @@ export default defineSchema({
     // Optional photo in Convex file storage. Only signed-in users see it;
     // the public page shows a category illustration instead.
     imageId: v.optional(v.id("_storage")),
+    // Demo photos linked from an allow-listed host (see lib/photos.ts). Set
+    // only by internal functions, never from the browser.
+    photoUrl: v.optional(v.string()),
     updatedAt: v.number(),
     // Soft delete keeps loan history intact.
     removedAt: v.optional(v.number()),

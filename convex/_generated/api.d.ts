@@ -15,6 +15,7 @@ import type * as lib_constants from "../lib/constants.js";
 import type * as lib_dates from "../lib/dates.js";
 import type * as lib_errors from "../lib/errors.js";
 import type * as lib_hmac from "../lib/hmac.js";
+import type * as lib_photos from "../lib/photos.js";
 import type * as loans from "../loans.js";
 import type * as model_loans from "../model/loans.js";
 import type * as model_tools from "../model/tools.js";
@@ -37,6 +38,7 @@ declare const fullApi: ApiFromModules<{
   "lib/dates": typeof lib_dates;
   "lib/errors": typeof lib_errors;
   "lib/hmac": typeof lib_hmac;
+  "lib/photos": typeof lib_photos;
   loans: typeof loans;
   "model/loans": typeof model_loans;
   "model/tools": typeof model_tools;
