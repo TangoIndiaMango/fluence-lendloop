@@ -1,6 +1,7 @@
-import { ConvexError, v } from "convex/values";
+import { v } from "convex/values";
 import { internalMutation, mutation, query } from "./_generated/server";
 import { getViewer, requireAdmin } from "./lib/auth";
+import { fail } from "./lib/errors";
 
 /**
  * Called by the client right after Clerk sign-in. Creates or refreshes the
@@ -10,7 +11,7 @@ export const store = mutation({
   args: {},
   handler: async (ctx) => {
     const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new ConvexError("Not signed in.");
+    if (!identity) fail("UNAUTHENTICATED", "Not signed in.");
 
     const name = (
       identity.name ||
@@ -87,7 +88,7 @@ export const setTrustedLender = mutation({
   handler: async (ctx, { userId, trusted }) => {
     await requireAdmin(ctx);
     const target = await ctx.db.get(userId);
-    if (!target) throw new ConvexError("User not found.");
+    if (!target) fail("NOT_FOUND", "User not found.");
     await ctx.db.patch(userId, { trustedLender: trusted });
   },
 });
@@ -103,7 +104,7 @@ export const setRole = internalMutation({
       .query("users")
       .withIndex("by_email", (q) => q.eq("email", email.toLowerCase()))
       .unique();
-    if (!user) throw new ConvexError(`No user with email ${email}. Sign in once first.`);
+    if (!user) fail("NOT_FOUND", `No user with email ${email}. Sign in once first.`);
     await ctx.db.patch(user._id, { role });
     return `${user.name} is now ${role}`;
   },

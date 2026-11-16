@@ -1,31 +1,46 @@
-import { ConvexError, v } from "convex/values";
+import { v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
-import { mutation, query, type QueryCtx } from "./_generated/server";
+import { mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
 import { firstName, isAdmin, requireViewer } from "./lib/auth";
 import { LIMITS } from "./lib/constants";
 import { todayUtc } from "./lib/dates";
+import { fail } from "./lib/errors";
+import { loansForTool } from "./model/loans";
 import { enqueueLoanEvent } from "./notifications";
 import { category, condition } from "./schema";
 
+type Range = { startDate: string; endDate: string };
 type Availability =
-  | { state: "available"; nextBookedFrom: string | null }
-  | { state: "on_loan"; until: string; overdue: boolean };
+  | { state: "available"; booked: Range[] }
+  | { state: "on_loan"; until: string; overdue: boolean; booked: Range[] };
+
+const MAX_BOOKED_SHOWN = 3;
 
 async function availabilityOf(
   ctx: QueryCtx,
   toolId: Id<"tools">,
   today: string,
 ): Promise<Availability> {
-  const approved = await ctx.db
-    .query("loans")
-    .withIndex("by_tool_status", (q) => q.eq("toolId", toolId).eq("status", "approved"))
-    .collect();
+  const approved = await loansForTool(ctx, toolId, "approved");
+  // Upcoming approved ranges, so borrowers can pick free dates up front
+  // instead of discovering a clash on submit.
+  const booked = approved
+    .filter((l) => l.startDate > today)
+    .sort((a, b) => a.startDate.localeCompare(b.startDate))
+    .slice(0, MAX_BOOKED_SHOWN)
+    .map(({ startDate, endDate }) => ({ startDate, endDate }));
   const current = approved.find((l) => l.startDate <= today);
   if (current) {
-    return { state: "on_loan", until: current.endDate, overdue: current.endDate < today };
+    return { state: "on_loan", until: current.endDate, overdue: current.endDate < today, booked };
   }
-  const upcoming = approved.map((l) => l.startDate).sort()[0] ?? null;
-  return { state: "available", nextBookedFrom: upcoming };
+  return { state: "available", booked };
+}
+
+/** Load an active listing; NOT_FOUND if missing or removed. */
+async function loadActiveTool(ctx: MutationCtx, toolId: Id<"tools">) {
+  const tool = await ctx.db.get(toolId);
+  if (!tool || tool.removedAt !== undefined) fail("NOT_FOUND", "Listing not found.");
+  return tool;
 }
 
 async function activeTools(ctx: QueryCtx, cat?: Doc<"tools">["category"]) {
@@ -47,12 +62,10 @@ export const listPublic = query({
   handler: async (ctx) => {
     const today = todayUtc();
     const tools = await activeTools(ctx);
-    const result: { name: string; category: string }[] = [];
-    for (const t of tools) {
-      const a = await availabilityOf(ctx, t._id, today);
-      if (a.state === "available") result.push({ name: t.name, category: t.category });
-    }
-    return result;
+    const states = await Promise.all(tools.map((t) => availabilityOf(ctx, t._id, today)));
+    return tools
+      .filter((_, i) => states[i].state === "available")
+      .map((t) => ({ name: t.name, category: t.category }));
   },
 });
 
@@ -97,10 +110,7 @@ export const mine = query({
       tools
         .filter((t) => t.removedAt === undefined)
         .map(async (t) => {
-          const pending = await ctx.db
-            .query("loans")
-            .withIndex("by_tool_status", (q) => q.eq("toolId", t._id).eq("status", "pending"))
-            .collect();
+          const pending = await loansForTool(ctx, t._id, "pending");
           return {
             _id: t._id,
             name: t.name,
@@ -119,10 +129,10 @@ function cleanToolInput(input: { name: string; description: string }) {
   const name = input.name.trim();
   const description = input.description.trim();
   if (name.length < 2 || name.length > LIMITS.toolName) {
-    throw new ConvexError(`Name must be 2–${LIMITS.toolName} characters.`);
+    fail("INVALID_INPUT", `Name must be 2–${LIMITS.toolName} characters.`);
   }
   if (description.length > LIMITS.toolDescription) {
-    throw new ConvexError(`Description must be at most ${LIMITS.toolDescription} characters.`);
+    fail("INVALID_INPUT", `Description must be at most ${LIMITS.toolDescription} characters.`);
   }
   return { name, description };
 }
@@ -137,7 +147,7 @@ export const create = mutation({
       .withIndex("by_owner", (q) => q.eq("ownerId", viewer._id))
       .collect();
     if (existing.filter((t) => t.removedAt === undefined).length >= LIMITS.maxListingsPerUser) {
-      throw new ConvexError(`You can have at most ${LIMITS.maxListingsPerUser} listings.`);
+      fail("LIMIT_REACHED", `You can have at most ${LIMITS.maxListingsPerUser} listings.`);
     }
     return await ctx.db.insert("tools", {
       ownerId: viewer._id,
@@ -161,9 +171,8 @@ export const update = mutation({
   },
   handler: async (ctx, args) => {
     const viewer = await requireViewer(ctx);
-    const tool = await ctx.db.get(args.toolId);
-    if (!tool || tool.removedAt !== undefined) throw new ConvexError("Listing not found.");
-    if (tool.ownerId !== viewer._id) throw new ConvexError("You can only edit your own listings.");
+    const tool = await loadActiveTool(ctx, args.toolId);
+    if (tool.ownerId !== viewer._id) fail("FORBIDDEN", "You can only edit your own listings.");
     const { name, description } = cleanToolInput(args);
     await ctx.db.patch(tool._id, {
       name,
@@ -184,19 +193,14 @@ export const remove = mutation({
   args: { toolId: v.id("tools") },
   handler: async (ctx, { toolId }) => {
     const viewer = await requireViewer(ctx);
-    const tool = await ctx.db.get(toolId);
-    if (!tool || tool.removedAt !== undefined) throw new ConvexError("Listing not found.");
+    const tool = await loadActiveTool(ctx, toolId);
     if (tool.ownerId !== viewer._id && !isAdmin(viewer)) {
-      throw new ConvexError("You can only remove your own listings.");
+      fail("FORBIDDEN", "You can only remove your own listings.");
     }
     const now = Date.now();
     await ctx.db.patch(toolId, { removedAt: now, removedBy: viewer._id });
 
-    const pending = await ctx.db
-      .query("loans")
-      .withIndex("by_tool_status", (q) => q.eq("toolId", toolId).eq("status", "pending"))
-      .collect();
-    for (const loan of pending) {
+    for (const loan of await loansForTool(ctx, toolId, "pending")) {
       await ctx.db.patch(loan._id, { status: "declined", decidedAt: now });
       await enqueueLoanEvent(ctx, loan._id, "request.declined", "listing removed");
     }

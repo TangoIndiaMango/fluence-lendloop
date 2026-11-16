@@ -1,7 +1,8 @@
-import { ConvexError, v } from "convex/values";
+import { v } from "convex/values";
 import { internalMutation, internalQuery, query } from "./_generated/server";
 import { firstName, requireAdmin } from "./lib/auth";
 import { daysBetween, todayUtc } from "./lib/dates";
+import { fail } from "./lib/errors";
 import { describeEvent } from "./notifications";
 
 // Internal functions behind the signed HTTP endpoints in http.ts. None of
@@ -63,10 +64,10 @@ export const recordReminder = internalMutation({
   },
   handler: async (ctx, { loanId, reminderKey, outcome, detail }) => {
     if (!reminderKey.startsWith(`reminder:${loanId}:`)) {
-      throw new ConvexError("reminderKey does not match loanId");
+      fail("INVALID_INPUT", "reminderKey does not match loanId");
     }
     const loan = await ctx.db.get(loanId);
-    if (!loan) throw new ConvexError("loan not found");
+    if (!loan) fail("NOT_FOUND", "loan not found");
 
     const kind = outcome === "sent" ? "reminder_sent" : "reminder_failed";
     const text =
@@ -104,7 +105,7 @@ export const recordNotificationDelivered = internalMutation({
       .query("outbox")
       .withIndex("by_event", (q) => q.eq("eventId", eventId))
       .unique();
-    if (!row) throw new ConvexError("unknown eventId");
+    if (!row) fail("NOT_FOUND", "unknown eventId");
     const key = `delivered:${eventId}`;
     const existing = await ctx.db
       .query("automationEvents")
