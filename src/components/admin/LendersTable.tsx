@@ -17,9 +17,11 @@ export function LendersTable() {
         <thead className="border-b border-border text-muted">
           <tr>
             <th scope="col" className="px-4 py-2 font-medium">Name</th>
-            <th scope="col" className="px-4 py-2 font-medium">Email</th>
+            <th scope="col" className="hidden px-4 py-2 font-medium sm:table-cell">Email</th>
             <th scope="col" className="px-4 py-2 font-medium">Listings</th>
-            <th scope="col" className="px-4 py-2 font-medium">Trusted Lender</th>
+            <th scope="col" className="px-4 py-2 font-medium">
+              Trusted<span className="hidden sm:inline"> Lender</span>
+            </th>
           </tr>
         </thead>
         <tbody>
@@ -27,8 +29,9 @@ export function LendersTable() {
             <tr key={u._id} className="border-b border-border last:border-0">
               <td className="px-4 py-2">
                 {u.name} {u.role === "admin" && <span className="text-xs text-muted">(admin)</span>}
+                <span className="block break-all text-xs text-muted sm:hidden">{u.email ?? "No email"}</span>
               </td>
-              <td className="px-4 py-2 text-muted">{u.email ?? "—"}</td>
+              <td className="hidden px-4 py-2 text-muted sm:table-cell">{u.email ?? "—"}</td>
               <td className="px-4 py-2">{u.activeListings}</td>
               <td className="px-4 py-2">
                 <Toggle
