@@ -1,7 +1,7 @@
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { internalMutation, mutation, query } from "./_generated/server";
 import { firstName, isAdmin, requireViewer } from "./lib/auth";
-import { LIMITS } from "./lib/constants";
+import { LIMITS, ORPHAN_UPLOAD_GRACE_MS } from "./lib/constants";
 import { todayUtc } from "./lib/dates";
 import { fail } from "./lib/errors";
 import { loansForTool } from "./model/loans";
@@ -193,5 +193,28 @@ export const remove = mutation({
       await ctx.db.patch(loan._id, { status: "declined", decidedAt: now });
       await enqueueLoanEvent(ctx, loan._id, "request.declined", "listing removed");
     }
+  },
+});
+
+/**
+ * Cron (crons.ts): delete stored files no listing uses once they are past
+ * the grace period. Catches rejected uploads, abandoned forms and anything a
+ * failed mutation couldn't clean up.
+ */
+export const cleanOrphanUploads = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const cutoff = Date.now() - ORPHAN_UPLOAD_GRACE_MS;
+    const files = await ctx.db.system.query("_storage").take(500);
+    let deleted = 0;
+    for (const file of files) {
+      if (file._creationTime > cutoff) continue;
+      const used = await ctx.db.query("tools").withIndex("by_image", (q) => q.eq("imageId", file._id)).first();
+      if (!used) {
+        await ctx.storage.delete(file._id);
+        deleted++;
+      }
+    }
+    return { deleted };
   },
 });

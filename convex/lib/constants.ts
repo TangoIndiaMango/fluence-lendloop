@@ -36,4 +36,7 @@ export const LIMITS = {
   imageMaxBytes: 5 * 1024 * 1024,
 } as const;
 
+// Uploads not attached to a listing within this window are deleted.
+export const ORPHAN_UPLOAD_GRACE_MS = 60 * 60 * 1000;
+
 export const IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"] as const;

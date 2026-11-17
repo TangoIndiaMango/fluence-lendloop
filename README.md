@@ -159,6 +159,7 @@ It checks that unsigned, forged and stale calls are rejected, that a valid call 
 - `tools.ts`, `loans.ts`, `users.ts`: the public API. Each function reads as authorise → check → change → notify.
 - `notifications.ts`: transactional outbox and the signed delivery action with retries.
 - `http.ts` + `automation.ts`: the four HMAC-protected endpoints n8n calls, backed by internal functions that the browser can't reach.
+- `crons.ts`: hourly cleanup of uploaded photos no listing uses.
 - `seed.ts`: demo data (internal).
 
 **Loan lifecycle:** `pending → approved → returned`, or `pending → declined | cancelled`. Overdue is derived (approved and the end date has passed), not stored, so it can't drift. Approving re-checks for clashes and auto-declines other pending requests for overlapping dates, and their borrowers are told.
@@ -171,7 +172,7 @@ It checks that unsigned, forged and stale calls are rejected, that a valid call 
 - `lib/errors.ts` turns the server's `{ code, message }` into UI text; `lib/format.ts` holds date and text helpers.
 - Pages stay thin: fetch, compose components, wire actions.
 
-**Photos:** owners upload a photo straight to Convex storage. The server checks type (JPEG, PNG or WebP) and size (5 MB) from storage metadata rather than trusting the browser, deletes rejected or replaced files, and won't let one listing reuse another's file. The seeded demo tools link free [Unsplash](https://unsplash.com/license) photos from the Unsplash CDN; only `images.unsplash.com` links are accepted, and only internal functions can set them (`npx convex run seed:photos`). Listings without a photo get a category illustration. The public page shows only the illustration, so it still exposes nothing but name and category.
+**Photos:** owners upload a photo straight to Convex storage. The server checks type (JPEG, PNG or WebP) and size (5 MB) from storage metadata rather than trusting the browser, deletes replaced files (an hourly job clears rejected or abandoned uploads), and won't let one listing reuse another's file. The seeded demo tools link free [Unsplash](https://unsplash.com/license) photos from the Unsplash CDN; only `images.unsplash.com` links are accepted, and only internal functions can set them (`npx convex run seed:photos`). Listings without a photo get a category illustration. The public page shows only the illustration, so it still exposes nothing but name and category.
 
 **Browse filters:** category is filtered in Convex through the `by_removed_category` index; text search and "available now" are applied to the loaded list. All three live in the URL (`?category=Garden&q=hedge&available=1`), so refresh, back and shared links keep them. Borrowers see upcoming booked ranges on each card, and the request form flags a clash before submitting (the server still re-checks).
 
@@ -237,6 +238,23 @@ I tested all of this locally against a local Convex backend and n8n 2.47:
 - n8n stopped mid-delivery: Convex backed off and delivered after it came back.
 - A forced verification failure triggered the error workflow, which emailed ops and logged to Convex.
 
+## Tests
+
+```bash
+pnpm test
+```
+
+69 unit tests in `tests/convex/` run the real Convex functions against an in-memory backend ([convex-test](https://docs.convex.dev/testing/convex-test) on the edge runtime), with no services needed. They cover:
+
+- **Roles:** only owners edit; owners or admins remove; only admins see all loans, lenders and health; others get `FORBIDDEN`, or `NOT_FOUND` where an id shouldn't be probeable.
+- **Loan rules:** date validation, clashes with approved loans (inclusive end day), duplicate requests, auto-decline on approve, the status machine, overdue flags.
+- **Data minimisation:** the public list is name and category only; emails appear only on approved loans, only to the other party; webhook payloads carry first names and one email.
+- **Automation:** idempotent reminder and delivery write-backs, daily reminder de-duplication, retries with backoff then a recorded failure.
+- **HTTP endpoints:** missing, wrong, tampered and replayed signatures are rejected; replies are signed; malformed write-backs get 400 (no retry); oversized bodies get 413.
+- **Uploads:** stored file type is checked, photos can't be borrowed between listings, and the hourly cleanup removes orphans.
+
+Writing these found one real bug: a rejected upload was deleted inside the mutation that then threw, so the rollback undid the delete. Rejected and abandoned uploads are now removed by an hourly cron (`convex/crons.ts`).
+
 ## What I'd change for production
 
 - **Real email provider** (Resend, Postmark or SES) through an n8n credential, with SPF/DKIM and per-user notification preferences and unsubscribe.
@@ -248,6 +266,6 @@ I tested all of this locally against a local Convex backend and n8n 2.47:
 - **Pagination** on the browse and loan lists, and availability precomputed on the tool instead of read per request.
 - **Timezones:** loan dates are UTC calendar days. I'd store the neighbourhood's timezone and compute "overdue" in it.
 - **Rate limiting** per user on request creation (Convex rate-limiter component), and abuse reporting.
-- **Tests:** `convex-test` unit tests for every role and status rule, Playwright for the main flows, and a CI job that runs `build-workflows.mjs` and fails if the committed JSON differs.
+- **More tests:** Playwright for the main flows, and a CI job that runs `pnpm test` and `build-workflows.mjs`, failing if the committed workflow JSON differs.
 - **Observability:** structured logs and an alert on outbox backlog or age, not just final failures. Execution data retention to match the privacy policy.
 - **Admin audit log** for removals and Trusted Lender changes.
